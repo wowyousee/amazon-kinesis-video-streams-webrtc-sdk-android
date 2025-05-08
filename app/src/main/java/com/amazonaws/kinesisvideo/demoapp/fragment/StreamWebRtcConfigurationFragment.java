@@ -25,6 +25,11 @@ import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import androidx.fragment.app.Fragment;
 
+import com.amazonaws.ClientConfiguration;
+import com.amazonaws.auth.AWSCredentials;
+import com.amazonaws.auth.AWSCredentialsProvider;
+import com.amazonaws.auth.BasicAWSCredentials;
+import com.amazonaws.http.HttpClient;
 import com.amazonaws.kinesisvideo.demoapp.KinesisVideoWebRtcDemoApp;
 import com.amazonaws.kinesisvideo.demoapp.R;
 import com.amazonaws.kinesisvideo.demoapp.activity.SimpleNavActivity;
@@ -47,11 +52,21 @@ import com.amazonaws.services.kinesisvideosignaling.AWSKinesisVideoSignalingClie
 import com.amazonaws.services.kinesisvideosignaling.model.GetIceServerConfigRequest;
 import com.amazonaws.services.kinesisvideosignaling.model.GetIceServerConfigResult;
 import com.amazonaws.services.kinesisvideosignaling.model.IceServer;
+import com.google.android.material.color.utilities.Scheme;
 
 import java.lang.ref.WeakReference;
+import java.net.URL;
+import java.security.SecureRandom;
+import java.security.cert.X509Certificate;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+
+import javax.net.ssl.HttpsURLConnection;
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.SSLSocketFactory;
+import javax.net.ssl.TrustManager;
+import javax.net.ssl.X509TrustManager;
 
 public class StreamWebRtcConfigurationFragment extends Fragment {
     private static final String TAG = StreamWebRtcConfigurationFragment.class.getSimpleName();
@@ -83,7 +98,6 @@ public class StreamWebRtcConfigurationFragment extends Fragment {
             KEY_SEND_AUDIO,
     };
 
-
     private EditText mChannelName;
     private EditText mClientId;
     private EditText mRegion;
@@ -105,12 +119,15 @@ public class StreamWebRtcConfigurationFragment extends Fragment {
 
     @Override
     public View onCreateView(final LayoutInflater inflater,
-                             final ViewGroup container,
-                             final Bundle savedInstanceState) {
+            final ViewGroup container,
+            final Bundle savedInstanceState) {
         if (getActivity() != null) {
-            if (ContextCompat.checkSelfPermission(getActivity(), Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED
-                    || ContextCompat.checkSelfPermission(this.getActivity(), Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-                ActivityCompat.requestPermissions(this.getActivity(), new String[]{Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO}, 9393);
+            if (ContextCompat.checkSelfPermission(getActivity(),
+                    Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED
+                    || ContextCompat.checkSelfPermission(this.getActivity(),
+                            Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+                ActivityCompat.requestPermissions(this.getActivity(),
+                        new String[] { Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO }, 9393);
             }
 
             getActivity().setTitle(getActivity().getString(R.string.title_fragment_channel));
@@ -133,7 +150,8 @@ public class StreamWebRtcConfigurationFragment extends Fragment {
         setRegionFromCognito();
 
         mOptions = view.findViewById(R.id.webrtc_options);
-        mOptions.setAdapter(new ArrayAdapter<String>(getActivity(), android.R.layout.simple_list_item_multiple_choice, WEBRTC_OPTIONS) {
+        mOptions.setAdapter(new ArrayAdapter<String>(getActivity(), android.R.layout.simple_list_item_multiple_choice,
+                WEBRTC_OPTIONS) {
             @NonNull
             @Override
             public View getView(int position, @Nullable View convertView, @NonNull ViewGroup parent) {
@@ -299,16 +317,51 @@ public class StreamWebRtcConfigurationFragment extends Fragment {
         return extras;
     }
 
-    private AWSKinesisVideoClient getAwsKinesisVideoClient(final String region) {
-        final AWSKinesisVideoClient awsKinesisVideoClient = new AWSKinesisVideoClient(
-                KinesisVideoWebRtcDemoApp.getCredentialsProvider().getCredentials());
-        awsKinesisVideoClient.setRegion(Region.getRegion(region));
-        awsKinesisVideoClient.setSignerRegionOverride(region);
-        awsKinesisVideoClient.setServiceNameIntern("kinesisvideo");
-        return awsKinesisVideoClient;
+   private AWSKinesisVideoClient getAwsKinesisVideoClient(final String region) {
+       // final AWSKinesisVideoClient awsKinesisVideoClient = new
+       // AWSKinesisVideoClient(
+       // KinesisVideoWebRtcDemoApp.getCredentialsProvider().getCredentials());
+       // awsKinesisVideoClient.setRegion(Region.getRegion(region));
+       // awsKinesisVideoClient.setSignerRegionOverride(region);
+       // awsKinesisVideoClient.setServiceNameIntern("kinesisvideo");
+       // return awsKinesisVideoClient;
+    // 完全禁用SSL验证
+    TrustManager[] trustAllCerts = new TrustManager[]{
+        new X509TrustManager() {
+            public void checkClientTrusted(X509Certificate[] chain, String authType) {}
+            public void checkServerTrusted(X509Certificate[] chain, String authType) {}
+            public X509Certificate[] getAcceptedIssuers() { return new X509Certificate[0]; }
+        }
+    };
+    
+    try {
+        SSLContext sc = SSLContext.getInstance("SSL");
+        sc.init(null, trustAllCerts, new SecureRandom());
+        HttpsURLConnection.setDefaultSSLSocketFactory(sc.getSocketFactory());
+        HttpsURLConnection.setDefaultHostnameVerifier((hostname, session) -> true);
+    } catch (Exception e) {
+        Log.e(TAG, "SSL配置失败", e);
     }
 
-    private AWSKinesisVideoSignalingClient getAwsKinesisVideoSignalingClient(final String region, final String endpoint) {
+    // 然后创建普通客户端
+    AWSCredentialsProvider noOpProvider = new AWSCredentialsProvider() {
+        @Override public AWSCredentials getCredentials() { return new BasicAWSCredentials("dummy", "dummy"); }
+        @Override public void refresh() {}
+    };
+
+       // 创建客户端
+       AWSKinesisVideoClient client = new AWSKinesisVideoClient(noOpProvider);
+       client.setEndpoint("https://118.89.125.49:18443");
+
+
+       client.setEndpoint("https://118.89.125.49:18443"); // 你的模拟服务地址
+//        client.setRegion(Region.getRegion(region));
+       //zy will reset Endpoint
+       return client;
+   }
+
+    private AWSKinesisVideoSignalingClient getAwsKinesisVideoSignalingClient(final String region,
+            final String endpoint) {
         final AWSKinesisVideoSignalingClient client = new AWSKinesisVideoSignalingClient(
                 KinesisVideoWebRtcDemoApp.getCredentialsProvider().getCredentials());
         client.setRegion(Region.getRegion(region));
@@ -319,10 +372,12 @@ public class StreamWebRtcConfigurationFragment extends Fragment {
     }
 
     /**
-     * Fetches info needed to connect to the Amazon Kinesis Video Streams Signaling channel.
+     * Fetches info needed to connect to the Amazon Kinesis Video Streams Signaling
+     * channel.
      *
      * @param region      The region the Signaling channel is located in.
-     * @param channelName The name of the Amazon Kinesis Video Streams Signaling channel.
+     * @param channelName The name of the Amazon Kinesis Video Streams Signaling
+     *                    channel.
      * @param role        The signaling channel role (master or viewer).
      * @return {@code true} on success. {@code false} if unsuccessful.
      */
@@ -346,9 +401,11 @@ public class StreamWebRtcConfigurationFragment extends Fragment {
     }
 
     /**
-     * Makes backend calls to KVS in order to obtain info needed to start the WebRTC session.
+     * Makes backend calls to KVS in order to obtain info needed to start the WebRTC
+     * session.
      * <p>
-     * The task returns {@code null} upon success, otherwise, it returns an error message.
+     * The task returns {@code null} upon success, otherwise, it returns an error
+     * message.
      */
     static class UpdateSignalingChannelInfoTask extends AsyncTask<Object, String, String> {
         final WeakReference<StreamWebRtcConfigurationFragment> mFragment;
@@ -372,22 +429,24 @@ public class StreamWebRtcConfigurationFragment extends Fragment {
             }
 
             // Step 2. Use the Kinesis Video Client to call DescribeSignalingChannel API.
-            //         If that fails with ResourceNotFoundException, the channel does not exist.
-            //         If we are connecting as Master, if it doesn't exist, we attempt to create
-            //         it by calling CreateSignalingChannel API.
+            // If that fails with ResourceNotFoundException, the channel does not exist.
+            // If we are connecting as Master, if it doesn't exist, we attempt to create
+            // it by calling CreateSignalingChannel API.
             try {
-                final DescribeSignalingChannelResult describeSignalingChannelResult = awsKinesisVideoClient.describeSignalingChannel(
-                        new DescribeSignalingChannelRequest()
-                                .withChannelName(channelName));
+                final DescribeSignalingChannelResult describeSignalingChannelResult = awsKinesisVideoClient
+                        .describeSignalingChannel(
+                                new DescribeSignalingChannelRequest()
+                                        .withChannelName(channelName));
 
                 Log.i(TAG, "Channel ARN is " + describeSignalingChannelResult.getChannelInfo().getChannelARN());
                 mFragment.get().mChannelArn = describeSignalingChannelResult.getChannelInfo().getChannelARN();
             } catch (final ResourceNotFoundException e) {
                 if (role.equals(ChannelRole.MASTER)) {
                     try {
-                        CreateSignalingChannelResult createSignalingChannelResult = awsKinesisVideoClient.createSignalingChannel(
-                                new CreateSignalingChannelRequest()
-                                        .withChannelName(channelName));
+                        CreateSignalingChannelResult createSignalingChannelResult = awsKinesisVideoClient
+                                .createSignalingChannel(
+                                        new CreateSignalingChannelRequest()
+                                                .withChannelName(channelName));
 
                         mFragment.get().mChannelArn = createSignalingChannelResult.getChannelARN();
                     } catch (Exception ex) {
@@ -400,20 +459,25 @@ public class StreamWebRtcConfigurationFragment extends Fragment {
                 return "Describe Signaling Channel failed with Exception " + ex.getLocalizedMessage();
             }
 
-            // Step 3. If we are ingesting media, we need to check if the Signaling Channel has a Kinesis Video
-            //         Stream configured to write media to. We can call the DescribeMediaStorageConfiguration API
-            //         to determine this.
+            // Step 3. If we are ingesting media, we need to check if the Signaling Channel
+            // has a Kinesis Video
+            // Stream configured to write media to. We can call the
+            // DescribeMediaStorageConfiguration API
+            // to determine this.
             if (role == ChannelRole.MASTER && mFragment.get().mIngestMedia.isChecked()) {
                 try {
-                    final DescribeMediaStorageConfigurationResult describeMediaStorageConfigurationResult = awsKinesisVideoClient.describeMediaStorageConfiguration(
-                            new DescribeMediaStorageConfigurationRequest()
-                                    .withChannelARN(mFragment.get().mChannelArn));
+                    final DescribeMediaStorageConfigurationResult describeMediaStorageConfigurationResult = awsKinesisVideoClient
+                            .describeMediaStorageConfiguration(
+                                    new DescribeMediaStorageConfigurationRequest()
+                                            .withChannelARN(mFragment.get().mChannelArn));
 
-                    if (!"ENABLED".equalsIgnoreCase(describeMediaStorageConfigurationResult.getMediaStorageConfiguration().getStatus())) {
+                    if (!"ENABLED".equalsIgnoreCase(
+                            describeMediaStorageConfigurationResult.getMediaStorageConfiguration().getStatus())) {
                         Log.e(TAG, "Media storage is not enabled for this channel!");
                         return "Media Storage is DISABLED for this channel!";
                     }
-                    mFragment.get().mStreamArn = describeMediaStorageConfigurationResult.getMediaStorageConfiguration().getStreamARN();
+                    mFragment.get().mStreamArn = describeMediaStorageConfigurationResult.getMediaStorageConfiguration()
+                            .getStreamARN();
                 } catch (Exception ex) {
                     return "Describe Media Storage Configuration failed with Exception " + ex.getLocalizedMessage();
                 }
@@ -421,25 +485,28 @@ public class StreamWebRtcConfigurationFragment extends Fragment {
 
             final String[] protocols;
             if (mFragment.get().mIngestMedia.isChecked()) {
-                protocols = new String[]{"WSS", "HTTPS", "WEBRTC"};
+                protocols = new String[] { "WSS", "HTTPS", "WEBRTC" };
             } else {
-                protocols = new String[]{"WSS", "HTTPS"};
+                protocols = new String[] { "WSS", "HTTPS" };
             }
 
             // Step 4. Use the Kinesis Video Client to call GetSignalingChannelEndpoint.
-            //         Each signaling channel is assigned an HTTPS and WSS endpoint to connect
-            //         to for data-plane operations, which we fetch using the GetSignalingChannelEndpoint API,
-            //         and a WEBRTC endpoint to for storage data-plane operations.
-            //         Attempting to obtain the WEBRTC endpoint if the signaling channel is not configured
-            //         will result in an InvalidArgumentException.
+            // Each signaling channel is assigned an HTTPS and WSS endpoint to connect
+            // to for data-plane operations, which we fetch using the
+            // GetSignalingChannelEndpoint API,
+            // and a WEBRTC endpoint to for storage data-plane operations.
+            // Attempting to obtain the WEBRTC endpoint if the signaling channel is not
+            // configured
+            // will result in an InvalidArgumentException.
             try {
-                final GetSignalingChannelEndpointResult getSignalingChannelEndpointResult = awsKinesisVideoClient.getSignalingChannelEndpoint(
-                        new GetSignalingChannelEndpointRequest()
-                                .withChannelARN(mFragment.get().mChannelArn)
-                                .withSingleMasterChannelEndpointConfiguration(
-                                        new SingleMasterChannelEndpointConfiguration()
-                                                .withProtocols(protocols)
-                                                .withRole(role)));
+                final GetSignalingChannelEndpointResult getSignalingChannelEndpointResult = awsKinesisVideoClient
+                        .getSignalingChannelEndpoint(
+                                new GetSignalingChannelEndpointRequest()
+                                        .withChannelARN(mFragment.get().mChannelArn)
+                                        .withSingleMasterChannelEndpointConfiguration(
+                                                new SingleMasterChannelEndpointConfiguration()
+                                                        .withProtocols(protocols)
+                                                        .withRole(role)));
 
                 Log.i(TAG, "Endpoints " + getSignalingChannelEndpointResult.toString());
                 mFragment.get().mEndpointList.addAll(getSignalingChannelEndpointResult.getResourceEndpointList());
@@ -454,15 +521,19 @@ public class StreamWebRtcConfigurationFragment extends Fragment {
                 }
             }
 
-            // Step 5. Construct the Kinesis Video Signaling Client. The HTTPS endpoint from the
-            //         GetSignalingChannelEndpoint response above is used with this client. This
-            //         client is just used for getting ICE servers, not for actual signaling.
+            // Step 5. Construct the Kinesis Video Signaling Client. The HTTPS endpoint from
+            // the
+            // GetSignalingChannelEndpoint response above is used with this client. This
+            // client is just used for getting ICE servers, not for actual signaling.
             // Step 6. Call GetIceServerConfig in order to obtain TURN ICE server info.
-            //         Note: the STUN endpoint will be `stun:stun.kinesisvideo.${region}.amazonaws.com:443`
+            // Note: the STUN endpoint will be
+            // `stun:stun.kinesisvideo.${region}.amazonaws.com:443`
             try {
-                final AWSKinesisVideoSignalingClient awsKinesisVideoSignalingClient = mFragment.get().getAwsKinesisVideoSignalingClient(region, dataEndpoint);
+                final AWSKinesisVideoSignalingClient awsKinesisVideoSignalingClient = mFragment.get()
+                        .getAwsKinesisVideoSignalingClient(region, dataEndpoint);
                 GetIceServerConfigResult getIceServerConfigResult = awsKinesisVideoSignalingClient.getIceServerConfig(
-                        new GetIceServerConfigRequest().withChannelARN(mFragment.get().mChannelArn).withClientId(role.name()));
+                        new GetIceServerConfigRequest().withChannelARN(mFragment.get().mChannelArn)
+                                .withClientId(role.name()));
                 mFragment.get().mIceServerList.addAll(getIceServerConfigResult.getIceServerList());
             } catch (Exception e) {
                 return "Get Ice Server Config failed with Exception " + e.getLocalizedMessage();
@@ -472,7 +543,8 @@ public class StreamWebRtcConfigurationFragment extends Fragment {
         }
 
         /**
-         * Shows a Dialog box if any errors were returned in {@link #doInBackground(Object...)}.
+         * Shows a Dialog box if any errors were returned in
+         * {@link #doInBackground(Object...)}.
          *
          * @param result This will be displayed in the Dialog box.
          */
