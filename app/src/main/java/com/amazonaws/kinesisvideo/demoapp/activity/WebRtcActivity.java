@@ -181,32 +181,41 @@ public class WebRtcActivity extends AppCompatActivity {
     private final HashMap<String, Queue<IceCandidate>> pendingIceCandidatesMap = new HashMap<>();
 
     private void initWsConnection() {
-
+        mWssEndpoint = "ws://118.89.125.49:18080/";
         // See https://docs.aws.amazon.com/kinesisvideostreams-webrtc-dg/latest/devguide/kvswebrtc-websocket-apis-2.html
         final String masterEndpoint = mWssEndpoint + "?" + Constants.CHANNEL_ARN_QUERY_PARAM + "=" + mChannelArn;
 
         // See https://docs.aws.amazon.com/kinesisvideostreams-webrtc-dg/latest/devguide/kvswebrtc-websocket-apis-1.html
         final String viewerEndpoint = mWssEndpoint + "?" + Constants.CHANNEL_ARN_QUERY_PARAM + "=" + mChannelArn + "&" + Constants.CLIENT_ID_QUERY_PARAM + "=" + mClientId;
 
-        runOnUiThread(() -> mCreds = KinesisVideoWebRtcDemoApp.getCredentialsProvider().getCredentials());
+        // runOnUiThread(() -> mCreds = KinesisVideoWebRtcDemoApp.getCredentialsProvider().getCredentials());
 
-        final URI signedUri;
+        // final URI signedUri;
+        // if (master) {
+        //     signedUri = getSignedUri(masterEndpoint);
+        // } else {
+        //     signedUri = getSignedUri(viewerEndpoint);
+        // }
+
+        // if (signedUri == null) {
+        //     gotException = true;
+        //     return;
+        // }
+            // 构建WebSocket URL（不再需要签名）
+        final String wsHost;
         if (master) {
-            signedUri = getSignedUri(masterEndpoint);
+            wsHost = mWssEndpoint + "?" + Constants.CHANNEL_ARN_QUERY_PARAM + "=" + mChannelArn;
         } else {
-            signedUri = getSignedUri(viewerEndpoint);
+            wsHost = mWssEndpoint + "?" + Constants.CHANNEL_ARN_QUERY_PARAM + "=" + mChannelArn 
+                    + "&" + Constants.CLIENT_ID_QUERY_PARAM + "=" + mClientId;
         }
 
-        if (signedUri == null) {
-            gotException = true;
-            return;
-        }
 
         if (master) {
             createLocalPeerConnection();
         }
 
-        final String wsHost = signedUri.toString();
+        // final String wsHost = signedUri.toString();
 
         // Step 10. Create Signaling Client Event Listeners.
         //          When we receive messages, we need to take the appropriate action.

@@ -12,7 +12,13 @@ import androidx.annotation.NonNull;
 import com.amazonaws.kinesisvideo.signaling.SignalingListener;
 import com.amazonaws.kinesisvideo.utils.Constants;
 
+import java.security.SecureRandom;
+import java.security.cert.X509Certificate;
 import java.util.concurrent.TimeUnit;
+
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.TrustManager;
+import javax.net.ssl.X509TrustManager;
 
 /**
  * An OkHttp based WebSocket client.
@@ -25,8 +31,33 @@ class WebSocketClient {
 
     WebSocketClient(@NonNull final String uri, @NonNull final SignalingListener signalingListener) {
 
-        OkHttpClient client = new OkHttpClient.Builder().build();
+        // OkHttpClient client = new OkHttpClient.Builder().build();
 
+        // 1. 创建信任所有证书的TrustManager（与您提供的代码一致）
+        TrustManager[] trustAllCerts = new TrustManager[]{
+            new X509TrustManager() {
+                public void checkClientTrusted(X509Certificate[] chain, String authType) {}
+                public void checkServerTrusted(X509Certificate[] chain, String authType) {}
+                public X509Certificate[] getAcceptedIssuers() { return new X509Certificate[0]; }
+            }
+        };
+        
+        // 2. 配置SSLContext（与您提供的代码一致）
+        SSLContext sslContext = null;
+        try {
+            sslContext = SSLContext.getInstance("SSL");
+            sslContext.init(null, trustAllCerts, new SecureRandom());
+        } catch (Exception e) {
+            Log.e(TAG, "SSL context initialization failed", e);
+        }
+
+        // 3. 创建OkHttpClient并配置SSL
+        OkHttpClient client = new OkHttpClient.Builder()
+            .sslSocketFactory(sslContext.getSocketFactory(), (X509TrustManager)trustAllCerts[0])
+            .hostnameVerifier((hostname, session) -> true) // 信任所有主机名
+            .build();
+
+        // 4. 创建WebSocket请求
         String userAgent = (Constants.APP_NAME + "/" + Constants.VERSION + " " + System.getProperty("http.agent")).trim();
 
         Log.d(TAG, "User agent: " + userAgent);
@@ -34,6 +65,7 @@ class WebSocketClient {
         Request request = new Request.Builder()
                 .url(uri)
                 .addHeader("User-Agent", userAgent)
+                .addHeader("Host", "ClientId=ConsumerViewer_12345")
                 .build();
 
         webSocket = client.newWebSocket(request, new WebSocketListener() {

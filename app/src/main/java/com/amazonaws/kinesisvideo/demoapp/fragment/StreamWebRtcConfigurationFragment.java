@@ -25,24 +25,23 @@ import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import androidx.fragment.app.Fragment;
 
-import com.amazonaws.ClientConfiguration;
 import com.amazonaws.auth.AWSCredentials;
 import com.amazonaws.auth.AWSCredentialsProvider;
 import com.amazonaws.auth.BasicAWSCredentials;
-import com.amazonaws.http.HttpClient;
 import com.amazonaws.kinesisvideo.demoapp.KinesisVideoWebRtcDemoApp;
 import com.amazonaws.kinesisvideo.demoapp.R;
 import com.amazonaws.kinesisvideo.demoapp.activity.SimpleNavActivity;
 import com.amazonaws.kinesisvideo.demoapp.activity.WebRtcActivity;
+import com.amazonaws.kinesisvideo.kvsclient.AWSKinesisVideoClient;
+import com.amazonaws.kinesisvideo.kvsclient.DescribeSignalingChannelResult;
+import com.amazonaws.kinesisvideo.kvsclient.GetIceServerConfigResult;
 import com.amazonaws.regions.Region;
-import com.amazonaws.services.kinesisvideo.AWSKinesisVideoClient;
 import com.amazonaws.services.kinesisvideo.model.ChannelRole;
 import com.amazonaws.services.kinesisvideo.model.CreateSignalingChannelRequest;
 import com.amazonaws.services.kinesisvideo.model.CreateSignalingChannelResult;
 import com.amazonaws.services.kinesisvideo.model.DescribeMediaStorageConfigurationRequest;
 import com.amazonaws.services.kinesisvideo.model.DescribeMediaStorageConfigurationResult;
 import com.amazonaws.services.kinesisvideo.model.DescribeSignalingChannelRequest;
-import com.amazonaws.services.kinesisvideo.model.DescribeSignalingChannelResult;
 import com.amazonaws.services.kinesisvideo.model.GetSignalingChannelEndpointRequest;
 import com.amazonaws.services.kinesisvideo.model.GetSignalingChannelEndpointResult;
 import com.amazonaws.services.kinesisvideo.model.ResourceEndpointListItem;
@@ -50,12 +49,9 @@ import com.amazonaws.services.kinesisvideo.model.ResourceNotFoundException;
 import com.amazonaws.services.kinesisvideo.model.SingleMasterChannelEndpointConfiguration;
 import com.amazonaws.services.kinesisvideosignaling.AWSKinesisVideoSignalingClient;
 import com.amazonaws.services.kinesisvideosignaling.model.GetIceServerConfigRequest;
-import com.amazonaws.services.kinesisvideosignaling.model.GetIceServerConfigResult;
 import com.amazonaws.services.kinesisvideosignaling.model.IceServer;
-import com.google.android.material.color.utilities.Scheme;
 
 import java.lang.ref.WeakReference;
-import java.net.URL;
 import java.security.SecureRandom;
 import java.security.cert.X509Certificate;
 import java.util.ArrayList;
@@ -64,7 +60,6 @@ import java.util.List;
 
 import javax.net.ssl.HttpsURLConnection;
 import javax.net.ssl.SSLContext;
-import javax.net.ssl.SSLSocketFactory;
 import javax.net.ssl.TrustManager;
 import javax.net.ssl.X509TrustManager;
 
@@ -317,7 +312,7 @@ public class StreamWebRtcConfigurationFragment extends Fragment {
         return extras;
     }
 
-   private AWSKinesisVideoClient getAwsKinesisVideoClient(final String region) {
+   private com.amazonaws.kinesisvideo.kvsclient.AWSKinesisVideoClient getAwsKinesisVideoClient(final String region) {
        // final AWSKinesisVideoClient awsKinesisVideoClient = new
        // AWSKinesisVideoClient(
        // KinesisVideoWebRtcDemoApp.getCredentialsProvider().getCredentials());
@@ -349,15 +344,17 @@ public class StreamWebRtcConfigurationFragment extends Fragment {
         @Override public void refresh() {}
     };
 
-       // 创建客户端
-       AWSKinesisVideoClient client = new AWSKinesisVideoClient(noOpProvider);
-       client.setEndpoint("https://118.89.125.49:18443");
+//       // 创建客户端
+//       AWSKinesisVideoClient client = new AWSKinesisVideoClient(noOpProvider);
+//       client.setEndpoint("https://118.89.125.49:18443");
+//
+//
+//       client.setEndpoint("https://118.89.125.49:18443"); // 你的模拟服务地址
+////        client.setRegion(Region.getRegion(region));
+//       //zy will reset Endpoint
+//       return client;
 
-
-       client.setEndpoint("https://118.89.125.49:18443"); // 你的模拟服务地址
-//        client.setRegion(Region.getRegion(region));
-       //zy will reset Endpoint
-       return client;
+       return new com.amazonaws.kinesisvideo.kvsclient.AWSKinesisVideoClient("https://118.89.125.49:18443");
    }
 
     private AWSKinesisVideoSignalingClient getAwsKinesisVideoSignalingClient(final String region,
@@ -529,9 +526,17 @@ public class StreamWebRtcConfigurationFragment extends Fragment {
             // Note: the STUN endpoint will be
             // `stun:stun.kinesisvideo.${region}.amazonaws.com:443`
             try {
-                final AWSKinesisVideoSignalingClient awsKinesisVideoSignalingClient = mFragment.get()
-                        .getAwsKinesisVideoSignalingClient(region, dataEndpoint);
-                GetIceServerConfigResult getIceServerConfigResult = awsKinesisVideoSignalingClient.getIceServerConfig(
+//                final AWSKinesisVideoSignalingClient awsKinesisVideoSignalingClient = mFragment.get()
+//                        .getAwsKinesisVideoSignalingClient(region, dataEndpoint);
+//                GetIceServerConfigResult getIceServerConfigResult = awsKinesisVideoSignalingClient.getIceServerConfig(
+//                        new GetIceServerConfigRequest().withChannelARN(mFragment.get().mChannelArn)
+//                                .withClientId(role.name()));
+//                mFragment.get().mIceServerList.addAll(getIceServerConfigResult.getIceServerList());
+
+                //zy Signaling client ->> client
+//                final AWSKinesisVideoSignalingClient awsKinesisVideoSignalingClient = mFragment.get()
+//                        .getAwsKinesisVideoSignalingClient(region, dataEndpoint);
+                GetIceServerConfigResult getIceServerConfigResult = awsKinesisVideoClient.getIceServerConfig(
                         new GetIceServerConfigRequest().withChannelARN(mFragment.get().mChannelArn)
                                 .withClientId(role.name()));
                 mFragment.get().mIceServerList.addAll(getIceServerConfigResult.getIceServerList());
